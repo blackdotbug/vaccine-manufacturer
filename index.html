@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title>vaccine manufacturer distribution</title>
+    <script src="http://d3js.org/d3.v5.js" charset="utf-8"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js" integrity="sha512-wNH6xsp2n8CfB91nrBtfc4sfLwYPBMjSWVUwQOp60AYYXH6i8yCwuKFZ4rgK2i6pQek/b+bSyR7b01/922IBzQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  </head>
+  <body>
+    <div id="viz"></div>
+
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="https://unpkg.com/tippy.js@6"></script>
+    <script type="text/javascript">
+      d3.json("https://jhucoronavirus.azureedge.net/jhucoronavirus/global_vaccine_manufacturer_timeline.dev.json").then(data => {
+        // console.log(data)
+        const parsed = []
+        data.forEach(d => {
+          d.data.forEach(c => {
+            let max = d3.max(c.timeline, t => t.date)
+            let datapoint = c.timeline.find(t => t.date === max)
+            parsed.push(
+              {country: c.country, region: c.region, manufacturer: d.manufacturer, date: datapoint.date, value: datapoint.doses_admin}
+            )
+          })
+        })
+        // console.log(parsed)
+
+        const width = 1800,
+          height = 900,
+          margin = {
+            top: 150,
+            right: 50,
+            bottom: 150,
+            left: 50
+          },
+          innerWidth = width - margin.left - margin.right,
+          innerHeight = height - margin.top - margin.bottom
+
+        const div = d3.select("#viz")
+        const svg = div.append("svg").attr('width', width).attr('height', height)
+
+        const group = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`)
+
+        group.append('text').text(`Doses Administered by Manufacturer as of ${parsed[0].date}`).style('font-size','32').attr('transform', `translate(0,-${margin.top/1.5})`)
+
+        var x0 = d3.scaleBand()
+          .rangeRound([0, innerWidth])
+          .paddingInner(0.1);
+
+        var y = d3.scaleLinear()
+          .rangeRound([innerHeight, 0]);
+
+        var y1 = d3.scaleBand()
+
+        var z = d3.scaleOrdinal()
+          .range(d3.quantize(d3.interpolateRgbBasis(["#9E0142", "#F67F10", "#FAFA6F", "#2EA02C", "#2777B4", "#4D4193"]), 12));
+
+        var stack = d3.stack()
+          .offset(d3.stackOffsetExpand);
+
+        x0.domain(parsed.map(d => d.region));
+        x1 = d3.scaleBand()
+          .padding(0.05)
+          .domain(parsed.filter(d => d.region === "Western Hemisphere").map(d => d.country))
+          .rangeRound([0, x0.bandwidth()])
+      	  .padding(0.2);
+        x2 = d3.scaleBand()
+          .padding(0.05)
+          .domain(parsed.filter(d => d.region === "Europe and Eurasia").map(d => d.country))
+          .rangeRound([0, x0.bandwidth()])
+      	  .padding(0.2);
+        x3 = d3.scaleBand()
+          .padding(0.05)
+          .domain(parsed.filter(d => d.region === "South and Central Asia").map(d => d.country))
+          .rangeRound([0, x0.bandwidth()])
+      	  .padding(0.2);
+        x4 = d3.scaleBand()
+          .padding(0.05)
+          .domain(parsed.filter(d => d.region === "Near East (North Africa and the Middle East)").map(d => d.country))
+          .rangeRound([0, x0.bandwidth()])
+      	  .padding(0.2);
+        x5 = d3.scaleBand()
+          .padding(0.05)
+          .domain(parsed.filter(d => d.region === "East Asia and the Pacific").map(d => d.country))
+          .rangeRound([0, x0.bandwidth()])
+      	  .padding(0.2);
+
+        z.domain(parsed.map(d => d.manufacturer).sort())
+        var keys = z.domain()
+
+        var groupData = d3.nest()
+          .key(d => d.country + d.region)
+        	.rollup(function(d, i){
+            var d2 = {country: d[0].country, region: d[0].region}
+            d.forEach(d => {
+              d2[d.manufacturer] = d.value
+            })
+            // console.log("rollup d", d, d2);
+          	return d2;
+          })
+          .entries(parsed)
+        	.map(d => d.value);
+
+        // console.log("groupData", groupData)
+
+        var stackData = stack
+      	 .keys(keys)(groupData)
+
+        console.log("stackData", stackData)
+
+        var series = group.selectAll(".series")
+          .data(stackData)
+          .join("g")
+            .attr("class", d => `${d.key}`)
+            .attr("fill", d => z(d.key));
+
+        series.selectAll(".rect")
+          .data(d => d.filter(e => e.data.region === "Western Hemisphere"))
+          .join("rect")
+        		.attr("class", "series-rect")
+        		.attr("transform", d => "translate(" + x0(d.data.region) + ",0)")
+            .attr("x", d => x1(d.data.country))
+            .attr("y", d => y(d[1]))
+            .attr("height", d => y(d[0]) - y(d[1]))
+            .attr("width", x1.bandwidth())
+
+        series.selectAll(".rect")
+          .data(d => d.filter(e => e.data.region === "Europe and Eurasia"))
+          .join("rect")
+            .attr("class", "series-rect")
+        		.attr("transform", d => "translate(" + x0(d.data.region) + ",0)")
+            .attr("x", d => x2(d.data.country))
+            .attr("y", d => y(d[1]))
+            .attr("height", d => y(d[0]) - y(d[1]))
+            .attr("width", x2.bandwidth())
+
+        series.selectAll(".rect")
+          .data(d => d.filter(e => e.data.region === "South and Central Asia"))
+          .join("rect")
+            .attr("class", "series-rect")
+        		.attr("transform", d => "translate(" + x0(d.data.region) + ",0)")
+            .attr("x", d => x3(d.data.country))
+            .attr("y", d => y(d[1]))
+            .attr("height", d => y(d[0]) - y(d[1]))
+            .attr("width", x3.bandwidth())
+
+        series.selectAll(".rect")
+          .data(d => d.filter(e => e.data.region === "Near East (North Africa and the Middle East)"))
+          .join("rect")
+            .attr("class", "series-rect")
+        		.attr("transform", d => "translate(" + x0(d.data.region) + ",0)")
+            .attr("x", d => x4(d.data.country))
+            .attr("y", d => y(d[1]))
+            .attr("height", d => y(d[0]) - y(d[1]))
+            .attr("width", x4.bandwidth())
+
+        series.selectAll(".rect")
+          .data(d => d.filter(e => e.data.region === "East Asia and the Pacific"))
+          .join("rect")
+            .attr("class", "series-rect")
+        		.attr("transform", d => "translate(" + x0(d.data.region) + ",0)")
+            .attr("x", d => x5(d.data.country))
+            .attr("y", d => y(d[1]))
+            .attr("height", d => y(d[0]) - y(d[1]))
+            .attr("width", x5.bandwidth())
+
+        group.append("g")
+          .attr("class", "axis")
+          .attr("transform", "translate(0," + innerHeight + ")")
+          .call(d3.axisBottom(x0));
+
+        const topAxis = group.append("g")
+
+        topAxis.append('g')
+          .attr("class", "axis")
+          .call(d3.axisTop(x1))
+
+        topAxis.append('g')
+          .attr("class", "axis")
+          .attr('transform', `translate(${x0.bandwidth()+37},0)`)
+          .call(d3.axisTop(x2))
+
+        topAxis.append('g')
+          .attr("class", "axis")
+          .attr('transform', `translate(${(x0.bandwidth()+37)*2},0)`)
+          .call(d3.axisTop(x3))
+
+        topAxis.append('g')
+          .attr("class", "axis")
+          .attr('transform', `translate(${(x0.bandwidth()+37)*3},0)`)
+          .call(d3.axisTop(x4))
+
+        topAxis.append('g')
+          .attr("class", "axis")
+          .attr('transform', `translate(${(x0.bandwidth()+37)*4},0)`)
+          .call(d3.axisTop(x5))
+
+        group.append("g")
+          .attr("class", "axis")
+          .call(d3.axisLeft(y).ticks(null, "s"))
+
+        topAxis.selectAll(".tick text").style('transform', 'rotate(300deg)').style('text-anchor', 'start').attr('dy', 8).attr('dx', 8)
+
+        group.append("g")
+          .attr("class", "legend")
+          .attr("transform", `translate(${margin.left},${innerHeight+(margin.bottom/2)})`);
+
+        var legend = d3.legendColor()
+          .shapeWidth(130)
+          .orient('horizontal')
+          .scale(z);
+
+        group.select(".legend")
+          .call(legend);
+
+        function setTooltips(){
+          series.selectAll(".series-rect").attr('data-tippy-content', function(d) {
+            let content = `<p>${d.data.country}: ${d3.format(',')(d.data[this.parentElement.classList.value])} ${this.parentElement.classList.value} doses</p>`
+            return content;
+          });
+
+          tippy(d3.selectAll('.series-rect').nodes(),
+            {
+              allowHTML:true,
+              placement:"right"
+            }
+          );
+        }
+
+        setTooltips();
+
+      })
+    </script>
+  </body>
+</html>
